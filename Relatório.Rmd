@@ -1,0 +1,295 @@
+---
+title: "Atividade em Sala - Resolução Q2"
+author: "Discente Fernando Bispo, Discente Artur"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    html_document: null
+    highlight: textmate
+    theme: flatly
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: no
+---
+
+**Relatório de desenvolvimento e resolução da Questão 02 da atividade atribuida**
+
+# Transformação dos dados
+
+<!-- ### Bibliotecas utilizadas -->
+
+<!-- Para possibilitar a tratativa e análise dos dados para obtenção da informação, se utilizou os seguintes pacotes: -->
+
+```{r Bibliotecas, warning=FALSE, message=FALSE, echo=FALSE}
+library(readxl) #Leitura de dados provenientes do Excel.
+library(tidyverse) 
+library(DT) #Geração de tabelas.
+library(janitor) #Tratamento do BD.
+library(patchwork)
+```
+
+## Importação do Banco de Dados
+
+Com o objetivo de iniciar o tratamento do Banco de Dados (BD) é necessário a importação do mesmo em uma variável, possibilitando assim a sua manipulação.
+
+```{r}
+BD <- read_excel("Dados/endometriose.xls")
+```
+
+## Identificando as variáveis.
+
+Após o processo de importação se faz necessário a identificação e a tipagem das variáveis a fim de determinar as manipulações necessárias para possibilitar a análise desejada.
+
+```{r}
+BD %>% names()
+glimpse(BD)
+```
+
+## Modificação das variáveis.
+
+Sendo variáveis categóricas ordinais faz-se necessário a mudança da categoria de texto e número para fator a fim de possibilitar sua correta utilização.
+
+```{r}
+BD <- 
+  BD %>% 
+    mutate(
+      Dismenorréia = as_factor(Dismenorréia),
+      AFSr = as_factor(AFSr)
+    )
+```
+
+# Resolução da Questão 2a.
+
+## Criação da tabela de contingência
+
+Para a resolução da questão em seu ítem a, se faz necessário o estudo do comportamento de duas variáveis categóricas, e para que isso seja possível uma das opções é por meio da tabela de contingência ou tabela bivariada, na tentativa de identificar correlação entre as variáveis solicitadas possibilitando assim a resolução da questão.
+
+```{r echo=FALSE}
+#Q2a. VAs AFSr x Dismenorréia------------
+#Cabeçalho personalizado: https://rstudio.github.io/DT/
+colunas = htmltools::withTags(table(
+  class = 'display',
+  thead(
+    tr(
+      th(rowspan = 2, 'Gravidade da Endometriose'),
+      th(colspan = 6, 'Níveis de Dor')
+    ),
+    tr(
+    lapply(c("Nenhuma","Leve","Moderada","Intensa","*", "Total de Obs."), th)
+    )
+  )
+))
+BD %>%
+  # filter(!is.na(AFSr)) %>% 
+  group_by(Grupo) %>% 
+  mutate(
+    AFSr = forcats::lvls_revalue(AFSr, c("Nenhuma", "Mínima", "Média", "Moderada", "Elevada")),
+    # Dismenorréia = forcats::lvls_revalue(Dismenorréia, new_levels = c("Dor Leve","Não Tem Dor","Dor Moderada","Dor Intensa","*")),
+    Dismenorréia = forcats::lvls_reorder(Dismenorréia, c(2,1,3,4,5))
+  ) %>%
+  # count(AFSr) %>% 
+  tabyl(AFSr, Dismenorréia) %>%
+  adorn_totals("col") %>%  #Linha de totais.
+  # # adorn_totals(c("row", "col")) %>%  #Linha de totais.
+  adorn_percentages("row") %>%
+  adorn_pct_formatting(digits=2) %>% 
+  # adorn_title("top", row_name = "Gravidade", col_name = "Dor na Menstruação") %>% 
+  DT::datatable(
+    colnames = c("Gravidade da Endometriose" = 1, "Total de Observações" = 7), 
+    container = colunas, 
+    rownames = FALSE,
+    caption = htmltools::tags$caption(#Possibilita a criação da legenda da tabele.
+      style = 'caption-side: bottom; text-align: left;',
+      'Tabela 1: ', htmltools::em('Comparativo percentual entre a Gravidade da Endometriose e os Níveis de Dor nos pacientes dos Grupos de Controle e Doentes.')
+    )
+  )
+```
+
+Em resposta a questão, conforme exposto na tabela é possível ver que **as pacientes que doentes apresentam sim mais dor que as pacientes não doentes**, pois dentre as pacientes não doentes, aproximadamente 67% não apresentam dor enquanto que 100% das pacientes doentes apresentam dor em intensidades variadas.
+
+A análise feita conforme descrito acima foi por meio da tabela de contingência, em virtude de estar se tratando de variáveis categóricas, no intuito de se identificar correlação entre as variáveis.
+
+## Questão 2b.
+
+Obtendo medidas resumo da variável idade para pacientes dos grupos de controle e doente.
+
+```{r Tratamento da VA PCRa, echo=FALSE}
+#-------Implementando as modificações---------------------------
+BD <- 
+  BD %>% 
+    mutate(#Modificando os dados da VA PCRa
+      PCRa2 = stringr::str_replace(PCRa, "<", ""),
+      PCRa2 = stringr::str_replace(PCRa2, ",", "."),
+      PCRa2 = as.double(PCRa2),
+      PCRa2 = if_else(PCRa2 == 0.5, 0.25, PCRa2)
+    )
+```
+
+```{r Tabelas, echo=FALSE}
+#----Q2b----
+Rot_Idade = htmltools::withTags(table(
+  class = 'display',
+  thead(
+    tr(
+      th(rowspan = 2, 'Grupo de Pacientes'),
+      th(colspan = 8, 'Idade dos Pacientes')
+    ),
+    tr(
+      lapply(c("Min","Q1","Média","Md",  "Q3", "Max", "Var", "DP"), th)
+    )
+  )
+))
+BD %>% 
+  group_by(Grupo) %>% 
+  summarise(
+    Min = min(Idade), 
+    Q1 = quantile(Idade, .25),
+    Media = round(mean(Idade),2), 
+    Md = median(Idade), 
+    Q3 = quantile(Idade, .75), 
+    Max = max(Idade), 
+    Var = round(var(Idade),2), 
+    DP = round(sd(Idade),2)
+  ) %>% 
+  DT::datatable(
+    rownames = FALSE, 
+    container = Rot_Idade,
+    caption = htmltools::tags$caption(#Possibilita a criação da legenda da tabele.
+      style = 'caption-side: bottom; text-align: left;',
+      'Tabela 2: ', htmltools::em('Medidas resumo e variabilidade da idade dos pacientes.')
+    )
+  )
+
+#----VA PCRa----
+Rot_PCRa = htmltools::withTags(table(
+  class = 'display',
+  thead(
+    tr(
+      th(rowspan = 2, 'Grupo de Pacientes'),
+      th(colspan = 8, 'Concentração de Proteína C-reativa')
+    ),
+    tr(
+      lapply(c("Min","Q1","Média","Md",  "Q3", "Max", "Var", "DP"), th)
+    )
+  )
+))
+BD %>% #Extraindo medidas resumo.
+  group_by(Grupo) %>% 
+  summarise(
+    Min = min(PCRa2), 
+    Q1 = quantile(PCRa2, .25),
+    Media = round(mean(PCRa2),2), 
+    Md = median(PCRa2),
+    Q3 = quantile(PCRa2, .75),
+    Max = max(PCRa2),
+    Var = round(var(PCRa2),2), 
+    DP = round(sd(PCRa2),2)
+  ) %>% DT::datatable(
+    rownames = FALSE, 
+    container = Rot_PCRa,
+    caption = htmltools::tags$caption(#Possibilita a criação da legenda da tabele.
+      style = 'caption-side: bottom; text-align: left;',
+      'Tabela 3: ', htmltools::em('Medidas resumo e variabilidade do Nível de Concentração de Proteína C-reativa dos pacientes.')
+    )
+  )
+```
+
+As idades do grupo de controle tem como média aproximadamente 35 anos, sendo que apenas 2 pessoas (13.3%) tem uma idade inferior ou igual a 30 anos.Também foi observado que a concentração de PCR em todas as pessoas do grupo controle foi inferior a 5.
+
+As idades do grupo de doentes tem como média aproximadamente 31 anos, com 19 pessoas (54.3%) de idade inferior ou igual a 30 anos. Foi observado que 15 pessoas (42.9%) possui a concentração de PCR superior a 5, sendo que 6 tem idade superior a 30 anos (40%) e 9 inferior a 30 anos (60%). Também foi observado que 10 pessoas (28.6%), sendo 2 de idade superior a 30 anos (20%) e 8 superior a 30 anos (80%).
+
+Pelos dados analizados, nem todas as pessoas doentes possuem PCR superior a 5, mas todas as pessoas observadas com PCR superior a 5 eram doentes. Também houve uma tendência para o PCR acima de 5 em pessoas de idade inferior a 30 anos, sendo que, quando o PCR é superior a 10, há uma predominância ainda maior de pessoas com idade inferior a 30 anos. No grupo de controle, houve pouca representatividade de pessoas com idade inferior a 30 anos, nos levando a questionar se, com um número maior de pessoas com idade inferior a 30 anos no grupo de controle iriamos obter algum caso de PCR superior a 5.
+
+Para análise desses dados, foi considerado os valores "\<0,5" em PCR como 0,25 para facilitar a análise. Foi chegado a esse valor tirando a média entre 0 e 0,5.
+
+```{r Histogramas, echo=FALSE}
+
+P1 <- BD %>% #Histograma
+  ggplot()+
+  geom_histogram(
+    aes(x = Idade), 
+    binwidth = 2, 
+    color = "white"
+    ) + labs(
+      y = "Frequência",
+      title = "Histograma",
+      subtitle = "Distribuição das idades dos pacientes."
+      )
+P3 <- 
+  BD %>% 
+    ggplot()+
+    geom_histogram(
+      aes(x = PCRa2), #fill = "blue", 
+      binwidth = 3, 
+      color = "white"
+      ) + labs(
+        x = "PCRa",
+        y = "Frequência",
+        title = "Histograma",
+        subtitle = "Concentração de Proteína C-reativa"
+      )
+
+P1 + P3
+
+```
+
+É possivel verificar por meio da comparação dos Histogramas um comportamento assimétrico a direita para a variável PCRa, sendo que ambas as variávéis possui comportamento bimodal.
+
+```{r Gráficos de Caixa, echo=FALSE}
+P2 <- BD %>% #Boxplot
+  group_by(Grupo) %>% 
+  ggplot() +
+  geom_boxplot(
+    aes(
+      y = Idade, 
+      x = Grupo)
+    ) + coord_cartesian(
+      ylim = c(0,45)
+      ) + labs(
+        title = "Gráfico de Caixas",
+        subtitle = "Comparativo entre as idades dos pacientes dos grupos de Controle e Doenetes."
+      )
+
+P4 <- 
+  BD %>% 
+    group_by(Grupo) %>% 
+    ggplot() +
+    geom_boxplot(
+      aes(
+        x = Grupo, 
+        y = PCRa2)
+      ) + coord_cartesian(
+        ylim = c(0,45)
+        ) + labs(
+          y = "PCRa",
+          title = "Gráfico de Caixas",
+          subtitle = "Comparativo da Concentração de Proteína C-reativa entre os pacientes dos grupos de Controle e Doenetes."
+        )
+
+P2 + P4
+```
+
+```{r Gráficos de dispersão, echo=FALSE}
+#----Gráfico de Dispersão entre as VAs Idade e PCRa a fim de identificar correlação.----
+BD %>% 
+  filter(Grupo %in%  c("Doente", "Controle")) %>% 
+  ggplot() +
+  geom_point(aes(x = Idade, y = PCRa2, color = Idade)) + 
+labs(x = "Idade dos Paciente", #Insere os rótulos e títulos no gráfico
+     y =  "Concentração de Proteína C-reativa",
+     title = "Gráfico de dispersão",
+     subtitle = "PCR x Idade dos pacientes por Grupo."
+     ) +
+coord_cartesian(ylim = c(0, 35)) + #Controla a escala do eixo y em coordenadas cartesianas.
+facet_wrap(~Grupo, ncol = 2) #Possibilita colocar 2 gráficos por tela.
+```
+
+Na tentativa de identificar correlação entre as variáveis PCRa e Idade foi elaborado o diagrama de dispersão entre as variáveis levando em consideração os grupos e não foi identificada correlação por meio grafico, para constatar foi realizada a análise correlacional se obtendo o valor abaixo descrito ratificando a avaliação gráfica.
+
+```{r Correlação, echo=FALSE}
+cor(BD$Idade, BD$PCRa2)
+```
